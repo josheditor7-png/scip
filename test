@@ -1,123 +1,235 @@
--- Nova Code Hub para ejecutores como Solara
+-- * Nova Code Hub con mejoras
 
-local player = game:GetService("Players").LocalPlayer
+local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 
--- Crear GUI
-local screenGui = Instance.new("ScreenGui", player:WaitForChild("PlayerGui"))
-screenGui.Name = "NovaCodeHub"
-screenGui.ResetOnSpawn = false
+local player = Players.LocalPlayer
+if not player then return end
+local guiParent = player:WaitForChild("PlayerGui")
 
--- Marco principal
+-- Crear ScreenGui
+local screenGui = Instance.new("ScreenGui")
+screenGui.Name = "NovaCodeHubGui"
+screenGui.ResetOnSpawn = false
+screenGui.Parent = guiParent
+
+-- Frame principal del menú
 local mainFrame = Instance.new("Frame")
-mainFrame.Size = UDim2.new(0, 250, 0, 120)
-mainFrame.Position = UDim2.new(1, -260, 0, 20)
+mainFrame.Size = UDim2.new(0, 260, 0, 140)
+mainFrame.Position = UDim2.new(0.5, -130, 0.3, -70)  -- posiciones relativas, se puede ajustar
 mainFrame.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
 mainFrame.BorderSizePixel = 0
+mainFrame.Name = "MainFrame"
 mainFrame.Parent = screenGui
 
-local corner = Instance.new("UICorner")
-corner.CornerRadius = UDim.new(0, 6)
-corner.Parent = mainFrame
+local mainCorner = Instance.new("UICorner")
+mainCorner.CornerRadius = UDim.new(0, 8)
+mainCorner.Parent = mainFrame
 
--- Botón de minimizar
-local minimizeButton = Instance.new("TextButton")
-minimizeButton.Size = UDim2.new(0, 25, 0, 25)
-minimizeButton.Position = UDim2.new(1, -30, 0, 5)
-minimizeButton.BackgroundColor3 = Color3.fromRGB(80, 80, 80)
-minimizeButton.Text = "-"
-minimizeButton.TextColor3 = Color3.new(1, 1, 1)
-minimizeButton.TextStrokeTransparency = 0
-minimizeButton.Parent = mainFrame
+-- Título
+local titleLabel = Instance.new("TextLabel")
+titleLabel.Size = UDim2.new(1, -10, 0, 25)
+titleLabel.Position = UDim2.new(0, 5, 0, 5)
+titleLabel.BackgroundTransparency = 1
+titleLabel.Text = "Nova Code Hub"
+titleLabel.TextColor3 = Color3.new(1, 1, 1)
+titleLabel.TextStrokeTransparency = 0
+titleLabel.TextSize = 20
+titleLabel.Font = Enum.Font.SourceSansBold
+titleLabel.Parent = mainFrame
 
-local minCorner = Instance.new("UICorner")
-minCorner.CornerRadius = UDim.new(0, 4)
-minCorner.Parent = minimizeButton
-
--- Botón toggle
-local toggleButton = Instance.new("TextButton")
-toggleButton.Size = UDim2.new(0, 200, 0, 50)
-toggleButton.Position = UDim2.new(0.5, -100, 0.5, -25)
-toggleButton.BackgroundColor3 = Color3.fromRGB(100, 100, 100)
-toggleButton.Text = "Activar Plataforma"
-toggleButton.TextColor3 = Color3.new(1, 1, 1)
-toggleButton.TextStrokeTransparency = 0
-toggleButton.Parent = mainFrame
+-- Botón minimizar / desplegar
+local toggleMenuButton = Instance.new("TextButton")
+toggleMenuButton.Size = UDim2.new(0, 25, 0, 25)
+toggleMenuButton.Position = UDim2.new(1, -30, 0, 5)
+toggleMenuButton.BackgroundColor3 = Color3.fromRGB(80, 80, 80)
+toggleMenuButton.Text = "_"  -- símbolo para minimizar
+toggleMenuButton.TextColor3 = Color3.new(1, 1, 1)
+toggleMenuButton.TextStrokeTransparency = 0
+toggleMenuButton.Name = "ToggleMenuButton"
+toggleMenuButton.Parent = mainFrame
 
 local toggleCorner = Instance.new("UICorner")
-toggleCorner.CornerRadius = UDim.new(0, 6)
-toggleCorner.Parent = toggleButton
+toggleCorner.CornerRadius = UDim.new(0, 4)
+toggleCorner.Parent = toggleMenuButton
 
--- Variables
+-- Botón toggle para plataformas
+local platButton = Instance.new("TextButton")
+platButton.Size = UDim2.new(0, 220, 0, 45)
+platButton.Position = UDim2.new(0.5, -110, 0.5, -15)
+platButton.BackgroundColor3 = Color3.fromRGB(100, 100, 100)
+platButton.Text = "Activar Plataforma"
+platButton.TextColor3 = Color3.new(1, 1, 1)
+platButton.TextStrokeTransparency = 0
+platButton.Font = Enum.Font.SourceSans
+platButton.TextSize = 18
+platButton.Parent = mainFrame
+
+local platCorner = Instance.new("UICorner")
+platCorner.CornerRadius = UDim.new(0, 6)
+platCorner.Parent = platButton
+
+-- Botón flotante cuando minimizado
+local floatButton = Instance.new("TextButton")
+floatButton.Size = UDim2.new(0, 60, 0, 30)
+floatButton.Position = UDim2.new(0.5, -30, 0.5, -15)
+floatButton.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
+floatButton.Text = "Nova"
+floatButton.TextColor3 = Color3.new(1, 1, 1)
+floatButton.TextStrokeTransparency = 0
+floatButton.Visible = false
+floatButton.Parent = screenGui
+
+local floatCorner = Instance.new("UICorner")
+floatCorner.CornerRadius = UDim.new(0, 6)
+floatCorner.Parent = floatButton
+
+-- Variables del sistema de plataforma
 local active = false
 local currentPlatform = nil
 local monitoring = false
 
-local function createPlatform(pos)
-	if currentPlatform then
-		currentPlatform:Destroy()
-	end
+-- Función para crear plataforma debajo del jugador
+local function createPlatform(position)
+    if currentPlatform then
+        currentPlatform:Destroy()
+    end
 
-	local part = Instance.new("Part")
-	part.Anchored = true
-	part.Size = Vector3.new(6, 1, 6)
-	part.Position = pos - Vector3.new(0, 3.5, 0)
-	part.Material = Enum.Material.SmoothPlastic
-	part.Color = Color3.fromRGB(150, 150, 150)
-	part.Transparency = 0.4
-	part.CanCollide = true
-	part.Name = "JumpPlatform"
-	part.Parent = workspace
+    local part = Instance.new("Part")
+    part.Anchored = true
+    part.Size = Vector3.new(6, 1, 6)
+    part.Position = position - Vector3.new(0, 3.5, 0)
+    part.Material = Enum.Material.SmoothPlastic
+    part.Color = Color3.fromRGB(150, 150, 150)
+    part.Transparency = 0.4
+    part.CanCollide = true
+    part.Name = "JumpPlatform"
+    part.Parent = workspace
 
-	currentPlatform = part
+    currentPlatform = part
 end
 
+-- Función que monitorea salto / cambio a caída y genera plataforma inmediatamente
 local function monitorJumping()
-	if monitoring then return end
-	monitoring = true
+    if monitoring then return end
+    monitoring = true
 
-	coroutine.wrap(function()
-		while active do
-			local character = player.Character
-			if character then
-				local humanoid = character:FindFirstChildOfClass("Humanoid")
-				local hrp = character:FindFirstChild("HumanoidRootPart")
+    coroutine.wrap(function()
+        while active do
+            local character = player.Character
+            if character then
+                local humanoid = character:FindFirstChildOfClass("Humanoid")
+                local hrp = character:FindFirstChild("HumanoidRootPart")
 
-				if humanoid and hrp then
-					if humanoid:GetState() == Enum.HumanoidStateType.Freefall then
-						createPlatform(hrp.Position)
-						repeat
-							RunService.RenderStepped:Wait()
-						until humanoid:GetState() ~= Enum.HumanoidStateType.Freefall
-					end
-				end
-			end
-			RunService.RenderStepped:Wait()
-		end
-		monitoring = false
-	end)()
+                if humanoid and hrp then
+                    local state = humanoid:GetState()
+
+                    -- Opción: detectar cuando cambia a estado “Jumping” o al pico del salto
+                    if state == Enum.HumanoidStateType.Jumping then
+                        -- Esperar un breve momento para alcanzar el pico
+                        -- Nota: el pico exacto es complicado, lo más seguro es reaccionar en Freefall rápidamente
+                        -- Así que hacemos una pequeña espera muy baja:
+                        RunService.RenderStepped:Wait()
+                        -- Ahora esperamos al Freefall
+                        repeat
+                            RunService.RenderStepped:Wait()
+                            state = humanoid:GetState()
+                        until state == Enum.HumanoidStateType.Freefall
+                        -- Cuando entra en caída, creamos la plataforma justo debajo del jugador
+                        createPlatform(hrp.Position)
+                    end
+
+                    -- Otra estrategia: Si ya está en Freefall, generar plataforma inmediatamente
+                    if state == Enum.HumanoidStateType.Freefall then
+                        createPlatform(hrp.Position)
+                        -- esperar hasta que salga de Freefall antes de permitir la próxima
+                        repeat
+                            RunService.RenderStepped:Wait()
+                            state = humanoid:GetState()
+                        until state ~= Enum.HumanoidStateType.Freefall
+                    end
+                end
+            end
+
+            RunService.RenderStepped:Wait()
+        end
+        monitoring = false
+    end)()
 end
 
-toggleButton.MouseButton1Click:Connect(function()
-	active = not active
-	if active then
-		toggleButton.Text = "Desactivar Plataforma"
-		monitorJumping()
-	else
-		toggleButton.Text = "Activar Plataforma"
-		if currentPlatform then
-			currentPlatform:Destroy()
-			currentPlatform = nil
-		end
-	end
+-- Conexión del botón de activar/desactivar plataforma
+platButton.MouseButton1Click:Connect(function()
+    active = not active
+    if active then
+        platButton.Text = "Desactivar Plataforma"
+        monitorJumping()
+    else
+        platButton.Text = "Activar Plataforma"
+        if currentPlatform then
+            currentPlatform:Destroy()
+            currentPlatform = nil
+        end
+    end
 end)
 
-local minimized = false
-minimizeButton.MouseButton1Click:Connect(function()
-	minimized = not minimized
-	for _, child in ipairs(mainFrame:GetChildren()) do
-		if child:IsA("TextButton") and child ~= minimizeButton then
-			child.Visible = not minimized
-		end
-	end
+-- Lógica de minimizar / desplegar menú
+toggleMenuButton.MouseButton1Click:Connect(function()
+    local isVisible = mainFrame.Visible
+    if isVisible then
+        -- Minimizar: ocultar menú, mostrar botón flotante
+        mainFrame.Visible = false
+        floatButton.Visible = true
+    else
+        -- Mostrar de nuevo
+        mainFrame.Visible = true
+        floatButton.Visible = false
+    end
+end)
+
+floatButton.MouseButton1Click:Connect(function()
+    -- Al tocar el botón flotante, reabrir el menú
+    mainFrame.Visible = true
+    floatButton.Visible = false
+end)
+
+-- Arrastrar el GUI con el mouse (drag & drop)
+do
+    local dragging = false
+    local dragStart = Vector2.new(0, 0)
+    local startPos = UDim2.new()
+
+    -- Detectar cuando presionan en el título para arrastrar
+    titleLabel.InputBegan:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 then
+            dragging = true
+            dragStart = input.Position
+            startPos = mainFrame.Position
+        end
+    end)
+
+    titleLabel.InputChanged:Connect(function(input)
+        if dragging and input.UserInputType == Enum.UserInputType.MouseMovement then
+            local delta = input.Position - dragStart
+            mainFrame.Position = UDim2.new(
+                startPos.X.Scale,
+                startPos.X.Offset + delta.X,
+                startPos.Y.Scale,
+                startPos.Y.Offset + delta.Y
+            )
+        end
+    end)
+
+    titleLabel.InputEnded:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 then
+            dragging = false
+        end
+    end)
+end
+
+-- Si el jugador reaparece, reiniciar el monitoreo si está activo
+player.CharacterAdded:Connect(function()
+    if active then
+        wait(1)
+        monitorJumping()
+    end
 end)
