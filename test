@@ -1,45 +1,66 @@
--- Nova Code Hub vN — con prints de depuración
+-- Nova Code Hub v3.2 — LocalScript completo
+-- Pega este script en StarterPlayer > StarterPlayerScripts (o ejecútalo en Play mode).
+-- Nota: Los botones "Chams" y "X-Ray" son UI + hooks seguros (no crean highlights ni modifican mundo).
+--       "Save Teleport" teletransporta SOLO al LocalPlayer (instantáneo).
+--       "Fly" está implementado localmente usando BodyVelocity/BodyGyro y es totalmente local.
 
+-- Servicios
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
+local UserInputService = game:GetService("UserInputService")
 local Workspace = game:GetService("Workspace")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local player = Players.LocalPlayer
 if not player then
     warn("No hay LocalPlayer")
     return
 end
-print("LocalPlayer detectado")
 
+-- === Configuraciones visuales y constantes ===
+local BASE_TEXT_COLOR = Color3.fromRGB(200, 200, 200)      -- texto por defecto (gris suave)
+local BASE_TEXT_STROKE = Color3.fromRGB(100, 100, 100)     -- stroke por defecto
+local ACTIVE_STROKE = Color3.fromRGB(100, 255, 100)        -- verde suave elegante (activo)
+local FRAME_BG = Color3.fromRGB(40, 40, 40)
+local BTN_BG = Color3.fromRGB(100, 100, 100)
+local SECTION_BTN_BG = Color3.fromRGB(60, 60, 60)
+
+-- Helper visual: aplica o quita visual de "activo" sin acumular cambios
+local function setButtonActiveVisual(btn, enabled)
+    -- Aseguramos que el botón exista y tenga propiedades de texto
+    if not btn or not btn:IsA("TextLabel") and not btn:IsA("TextButton") then return end
+    if enabled then
+        btn.TextStrokeTransparency = 0
+        btn.TextStrokeColor3 = ACTIVE_STROKE
+    else
+        btn.TextStrokeTransparency = 0
+        btn.TextStrokeColor3 = BASE_TEXT_STROKE
+    end
+end
+
+-- === GUI base (mismo tamaño que tenías) ===
 local guiParent = player:WaitForChild("PlayerGui", 5)
 if not guiParent then
-    warn("No se encontró PlayerGui")
+    warn("No PlayerGui encontrado")
     return
 end
-print("PlayerGui encontrado")
 
--- Crear ScreenGui
 local screenGui = Instance.new("ScreenGui")
 screenGui.Name = "NovaCodeHubGui"
 screenGui.ResetOnSpawn = false
 screenGui.Parent = guiParent
-print("ScreenGui creado")
 
--- Frame principal del menú
 local mainFrame = Instance.new("Frame")
 mainFrame.Name = "MainFrame"
-mainFrame.Size = UDim2.new(0, 260, 0, 40)
+mainFrame.Size = UDim2.new(0, 260, 0, 40) -- conservamos tamaño original
 mainFrame.Position = UDim2.new(0.5, -130, 0.3, -20)
-mainFrame.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
+mainFrame.BackgroundColor3 = FRAME_BG
 mainFrame.BorderSizePixel = 0
 mainFrame.ClipsDescendants = true
 mainFrame.Parent = screenGui
+Instance.new("UICorner", mainFrame).CornerRadius = UDim.new(0, 8)
 
-local mainCorner = Instance.new("UICorner")
-mainCorner.CornerRadius = UDim.new(0, 8)
-mainCorner.Parent = mainFrame
-
--- Barra de título
+-- Title bar
 local titleBar = Instance.new("Frame")
 titleBar.Name = "TitleBar"
 titleBar.Size = UDim2.new(1, 0, 0, 30)
@@ -52,44 +73,36 @@ titleLabel.Size = UDim2.new(1, -60, 1, 0)
 titleLabel.Position = UDim2.new(0, 10, 0, 0)
 titleLabel.BackgroundTransparency = 1
 titleLabel.Text = "Nova Code Hub"
-titleLabel.TextColor3 = Color3.new(1, 1, 1)
+titleLabel.TextColor3 = BASE_TEXT_COLOR
 titleLabel.TextStrokeTransparency = 0
+titleLabel.TextStrokeColor3 = BASE_TEXT_STROKE
 titleLabel.TextSize = 18
 titleLabel.Font = Enum.Font.SourceSansBold
 titleLabel.Parent = titleBar
 
--- Botón minimizar / desplegar menú
 local toggleMenuButton = Instance.new("TextButton")
 toggleMenuButton.Name = "ToggleMenuButton"
 toggleMenuButton.Size = UDim2.new(0, 25, 0, 25)
 toggleMenuButton.Position = UDim2.new(1, -30, 0, 2)
 toggleMenuButton.BackgroundColor3 = Color3.fromRGB(80, 80, 80)
 toggleMenuButton.Text = "-"
-toggleMenuButton.TextColor3 = Color3.new(1, 1, 1)
+toggleMenuButton.TextColor3 = BASE_TEXT_COLOR
 toggleMenuButton.TextStrokeTransparency = 0
 toggleMenuButton.Parent = titleBar
+Instance.new("UICorner", toggleMenuButton).CornerRadius = UDim.new(0, 4)
 
-local toggleCorner = Instance.new("UICorner")
-toggleCorner.CornerRadius = UDim.new(0, 4)
-toggleCorner.Parent = toggleMenuButton
-
--- Botón flotante
 local floatButton = Instance.new("TextButton")
 floatButton.Name = "FloatButton"
 floatButton.Size = UDim2.new(0, 60, 0, 30)
 floatButton.Position = UDim2.new(0.5, -30, 0.5, -15)
 floatButton.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
 floatButton.Text = "Nova"
-floatButton.TextColor3 = Color3.new(1, 1, 1)
+floatButton.TextColor3 = BASE_TEXT_COLOR
 floatButton.TextStrokeTransparency = 0
 floatButton.Visible = false
 floatButton.Parent = screenGui
+Instance.new("UICorner", floatButton).CornerRadius = UDim.new(0, 8)
 
-local floatCorner = Instance.new("UICorner")
-floatCorner.CornerRadius = UDim.new(0, 8)
-floatCorner.Parent = floatButton
-
--- Contenedor para secciones
 local sectionsContainer = Instance.new("Frame")
 sectionsContainer.Name = "SectionsContainer"
 sectionsContainer.Size = UDim2.new(1, 0, 1, -30)
@@ -97,31 +110,28 @@ sectionsContainer.Position = UDim2.new(0, 0, 0, 30)
 sectionsContainer.BackgroundTransparency = 1
 sectionsContainer.Parent = mainFrame
 
--- Tabla de secciones
+-- Sistema de secciones reutilizable (sin bug de saturación)
 local sections = {}
-
 local function createSection(name)
     local section = {}
     section.Name = name
     section.Expanded = false
+    section.Elements = {}
 
     local index = #sections
-
     local btn = Instance.new("TextButton")
     btn.Name = name .. "Button"
     btn.Size = UDim2.new(1, 0, 0, 25)
     btn.Position = UDim2.new(0, 0, 0, index * 25)
-    btn.BackgroundColor3 = Color3.fromRGB(70, 70, 70)
+    btn.BackgroundColor3 = SECTION_BTN_BG
     btn.Text = name .. " ▼"
-    btn.TextColor3 = Color3.new(1, 1, 1)
+    btn.TextColor3 = BASE_TEXT_COLOR
     btn.TextStrokeTransparency = 0
+    btn.TextStrokeColor3 = BASE_TEXT_STROKE
     btn.Font = Enum.Font.SourceSans
     btn.TextSize = 16
     btn.Parent = sectionsContainer
-
-    local btnCorner = Instance.new("UICorner")
-    btnCorner.CornerRadius = UDim.new(0, 4)
-    btnCorner.Parent = btn
+    Instance.new("UICorner", btn).CornerRadius = UDim.new(0, 4)
 
     local frame = Instance.new("Frame")
     frame.Name = name .. "Frame"
@@ -133,93 +143,158 @@ local function createSection(name)
 
     section.Button = btn
     section.Frame = frame
-    section.Elements = {}
 
     btn.MouseButton1Click:Connect(function()
         section.Expanded = not section.Expanded
-        if section.Expanded then
-            btn.Text = name .. " ▲"
-        else
-            btn.Text = name .. " ▼"
-        end
-
+        btn.Text = section.Expanded and (name .. " ▲") or (name .. " ▼")
+        -- recalcular layout en modo determinista (evita acumulaciones)
         local yOffset = 0
         for _, sec in ipairs(sections) do
             sec.Button.Position = UDim2.new(0, 0, 0, yOffset)
             local frameH = 0
-            if sec.Expanded then
-                frameH = #sec.Elements * 30
-            end
+            if sec.Expanded then frameH = #sec.Elements * 30 end
             sec.Frame.Position = UDim2.new(0, 0, 0, yOffset + 25)
             sec.Frame.Size = UDim2.new(1, 0, 0, frameH)
             for i, elem in ipairs(sec.Elements) do
                 elem.Position = UDim2.new(0, 0, 0, (i - 1) * 30)
+                -- restauramos propiedades visuales base (evita saturación)
+                if elem:IsA("TextButton") or elem:IsA("TextLabel") then
+                    elem.TextColor3 = BASE_TEXT_COLOR
+                    elem.TextStrokeColor3 = BASE_TEXT_STROKE
+                    elem.TextStrokeTransparency = 0
+                end
             end
             yOffset = yOffset + 25 + frameH
         end
-
-        local totalHeight = 30 + yOffset
-        mainFrame.Size = UDim2.new(mainFrame.Size.X.Scale, mainFrame.Size.X.Offset, 0, totalHeight)
+        mainFrame.Size = UDim2.new(mainFrame.Size.X.Scale, mainFrame.Size.X.Offset, 0, 30 + yOffset)
     end)
 
     table.insert(sections, section)
     return section
 end
 
--- Crear sección “Player”
+-- Crear secciones: Player, ESP, Teleports, Combat, Misc
 local playerSection = createSection("Player")
+local espSection = createSection("ESP")
+local teleportSection = createSection("Teleports")
+local combatSection = createSection("Combat")
+local miscSection = createSection("Misc")
 
--- Botón plataforma
+-- === PLAYER: Plataforma, Noclip, Fly (Fly implementado local) ===
+-- Plataforma
 local platBtn = Instance.new("TextButton")
 platBtn.Name = "PlatToggle"
 platBtn.Size = UDim2.new(1, 0, 0, 30)
-platBtn.Position = UDim2.new(0, 0, 0, 0)
-platBtn.BackgroundColor3 = Color3.fromRGB(100, 100, 100)
+platBtn.BackgroundColor3 = BTN_BG
 platBtn.Text = "Activar Plataforma"
-platBtn.TextColor3 = Color3.new(1, 1, 1)
+platBtn.TextColor3 = BASE_TEXT_COLOR
 platBtn.TextStrokeTransparency = 0
 platBtn.Font = Enum.Font.SourceSans
 platBtn.TextSize = 16
 platBtn.Parent = playerSection.Frame
-
-local platCorner2 = Instance.new("UICorner")
-platCorner2.CornerRadius = UDim.new(0, 4)
-platCorner2.Parent = platBtn
-
+Instance.new("UICorner", platBtn).CornerRadius = UDim.new(0, 4)
 table.insert(playerSection.Elements, platBtn)
 
--- Botón noclip
+-- Noclip
 local noclipBtn = Instance.new("TextButton")
 noclipBtn.Name = "NoclipToggle"
 noclipBtn.Size = UDim2.new(1, 0, 0, 30)
 noclipBtn.Position = UDim2.new(0, 0, 0, 30)
-noclipBtn.BackgroundColor3 = Color3.fromRGB(100, 100, 100)
+noclipBtn.BackgroundColor3 = BTN_BG
 noclipBtn.Text = "Activar Noclip"
-noclipBtn.TextColor3 = Color3.new(1, 1, 1)
+noclipBtn.TextColor3 = BASE_TEXT_COLOR
 noclipBtn.TextStrokeTransparency = 0
 noclipBtn.Font = Enum.Font.SourceSans
 noclipBtn.TextSize = 16
 noclipBtn.Parent = playerSection.Frame
-
-local noclipCorner = Instance.new("UICorner")
-noclipCorner.CornerRadius = UDim.new(0, 4)
-noclipCorner.Parent = noclipBtn
-
+Instance.new("UICorner", noclipBtn).CornerRadius = UDim.new(0, 4)
 table.insert(playerSection.Elements, noclipBtn)
 
--- Variables de plataforma
+-- Fly
+local flyBtn = Instance.new("TextButton")
+flyBtn.Name = "FlyToggle"
+flyBtn.Size = UDim2.new(1, 0, 0, 30)
+flyBtn.Position = UDim2.new(0, 0, 0, 60)
+flyBtn.BackgroundColor3 = BTN_BG
+flyBtn.Text = "Activar Fly (vel 60)"
+flyBtn.TextColor3 = BASE_TEXT_COLOR
+flyBtn.TextStrokeTransparency = 0
+flyBtn.Font = Enum.Font.SourceSans
+flyBtn.TextSize = 16
+flyBtn.Parent = playerSection.Frame
+Instance.new("UICorner", flyBtn).CornerRadius = UDim.new(0, 4)
+table.insert(playerSection.Elements, flyBtn)
+
+-- === Teleports: Save Teleport ===
+local saveTpBtn = Instance.new("TextButton")
+saveTpBtn.Name = "SaveTeleport"
+saveTpBtn.Size = UDim2.new(1, 0, 0, 30)
+saveTpBtn.BackgroundColor3 = BTN_BG
+saveTpBtn.Text = "Save Teleport (guardar / teleport)"
+saveTpBtn.TextColor3 = BASE_TEXT_COLOR
+saveTpBtn.TextStrokeTransparency = 0
+saveTpBtn.Font = Enum.Font.SourceSans
+saveTpBtn.TextSize = 16
+saveTpBtn.Parent = teleportSection.Frame
+Instance.new("UICorner", saveTpBtn).CornerRadius = UDim.new(0, 4)
+table.insert(teleportSection.Elements, saveTpBtn)
+
+-- === ESP: Chams (UI hook) & X-Ray (UI hook) ===
+local chamsBtn = Instance.new("TextButton")
+chamsBtn.Name = "ChamsToggle"
+chamsBtn.Size = UDim2.new(1, 0, 0, 30)
+chamsBtn.BackgroundColor3 = BTN_BG
+chamsBtn.Text = "Chams (hook)"
+chamsBtn.TextColor3 = BASE_TEXT_COLOR
+chamsBtn.TextStrokeTransparency = 0
+chamsBtn.Font = Enum.Font.SourceSans
+chamsBtn.TextSize = 16
+chamsBtn.Parent = espSection.Frame
+Instance.new("UICorner", chamsBtn).CornerRadius = UDim.new(0, 4)
+table.insert(espSection.Elements, chamsBtn)
+
+local xrayBtn = Instance.new("TextButton")
+xrayBtn.Name = "XRayToggle"
+xrayBtn.Size = UDim2.new(1, 0, 0, 30)
+xrayBtn.Position = UDim2.new(0, 0, 0, 30)
+xrayBtn.BackgroundColor3 = BTN_BG
+xrayBtn.Text = "X-Ray (hook)"
+xrayBtn.TextColor3 = BASE_TEXT_COLOR
+xrayBtn.TextStrokeTransparency = 0
+xrayBtn.Font = Enum.Font.SourceSans
+xrayBtn.TextSize = 16
+xrayBtn.Parent = espSection.Frame
+Instance.new("UICorner", xrayBtn).CornerRadius = UDim.new(0, 4)
+table.insert(espSection.Elements, xrayBtn)
+
+-- === Combat & Misc (vacíos por ahora) ===
+-- (Secciones ya creadas; puedes añadir elementos más tarde)
+
+-- === Variables funcionales ===
+-- Plataforma
 local activePlat = false
 local currentPlatform = nil
 local monitoringPlat = false
 
--- Variables de noclip
+-- Noclip
 local activeNoclip = false
 local originalCollisions = {}
 
+-- Fly
+local flyActive = false
+local flySpeed = 60
+local flyBV, flyBG, flyConn = nil, nil, nil
+local movementInput = Vector3.new()
+local verticalInput = 0
+local keysDown = {}
+
+-- Save Teleport
+local savedTeleportPos = nil
+local savedTeleportCFrame = nil
+
+-- === Funciones: Plataforma / Noclip (lógicas ya conocidas) ===
 local function createPlatform(position)
-    if currentPlatform then
-        currentPlatform:Destroy()
-    end
+    if currentPlatform then currentPlatform:Destroy() end
     local part = Instance.new("Part")
     part.Anchored = true
     part.Size = Vector3.new(6, 1, 6)
@@ -229,8 +304,9 @@ local function createPlatform(position)
     part.Transparency = 0.4
     part.CanCollide = true
     part.Name = "JumpPlatform"
-    part.Parent = workspace
+    part.Parent = Workspace
     currentPlatform = part
+    print("[Nova] Plataforma creada en:", tostring(part.Position))
 end
 
 local function monitorJumping()
@@ -245,19 +321,12 @@ local function monitorJumping()
                 if humanoid and hrp then
                     local state = humanoid:GetState()
                     if state == Enum.HumanoidStateType.Jumping then
-                        RunService.RenderStepped:Wait()
-                        repeat
-                            RunService.RenderStepped:Wait()
-                            state = humanoid:GetState()
-                        until state == Enum.HumanoidStateType.Freefall
+                        repeat RunService.RenderStepped:Wait(); state = humanoid:GetState() until state == Enum.HumanoidStateType.Freefall
                         createPlatform(hrp.Position)
                     end
                     if state == Enum.HumanoidStateType.Freefall then
                         createPlatform(hrp.Position)
-                        repeat
-                            RunService.RenderStepped:Wait()
-                            state = humanoid:GetState()
-                        until state ~= Enum.HumanoidStateType.Freefall
+                        repeat RunService.RenderStepped:Wait(); state = humanoid:GetState() until state ~= Enum.HumanoidStateType.Freefall
                     end
                 end
             end
@@ -277,92 +346,232 @@ local function enableNoclip()
         end
     end
     activeNoclip = true
-    RunService.Stepped:Connect(function()
-        if not activeNoclip then return end
-        local char = player.Character
-        if char then
-            local humanoid = char:FindFirstChildOfClass("Humanoid")
-            local hrp = char:FindFirstChild("HumanoidRootPart")
-            if humanoid and hrp and humanoid:GetState() == Enum.HumanoidStateType.Freefall then
-                local origin = hrp.Position
-                local dir = Vector3.new(0, -5, 0)
-                local ray = Workspace:Raycast(origin, dir)
-                if not ray then
-                    -- no suelo cercano
-                    for part, _ in pairs(originalCollisions) do
-                        if part and part.Parent then
-                            part.CanCollide = true
-                        end
-                    end
-                else
-                    for part, _ in pairs(originalCollisions) do
-                        if part and part.Parent then
-                            part.CanCollide = false
-                        end
-                    end
-                end
-            end
-        end
-    end)
+    print("[Nova] Noclip activado (local).")
 end
 
 local function disableNoclip()
-    local character = player.Character
-    if not character then return end
     for part, _ in pairs(originalCollisions) do
-        if part and part.Parent then
-            part.CanCollide = true
-        end
+        if part and part.Parent then part.CanCollide = true end
     end
     originalCollisions = {}
     activeNoclip = false
+    print("[Nova] Noclip desactivado (local).")
 end
 
+-- === Fly: implementación local segura ===
+local function startFly()
+    if flyActive then return end
+    local character = player.Character
+    if not character then return end
+    local hrp = character:FindFirstChild("HumanoidRootPart")
+    if not hrp then return end
+
+    -- Limpieza por si hay restos
+    if flyBV and flyBV.Parent then flyBV:Destroy() end
+    if flyBG and flyBG.Parent then flyBG:Destroy() end
+    if flyConn then flyConn:Disconnect(); flyConn = nil end
+
+    flyBV = Instance.new("BodyVelocity")
+    flyBV.MaxForce = Vector3.new(1e5, 1e5, 1e5)
+    flyBV.Velocity = Vector3.new(0, 0, 0)
+    flyBV.P = 1e4
+    flyBV.Parent = hrp
+
+    flyBG = Instance.new("BodyGyro")
+    flyBG.MaxTorque = Vector3.new(1e5, 1e5, 1e5)
+    flyBG.P = 1e4
+    flyBG.CFrame = hrp.CFrame
+    flyBG.Parent = hrp
+
+    -- Conexión ligera y controlada
+    flyConn = RunService.Heartbeat:Connect(function()
+        if not flyBV or not flyBG or not hrp then return end
+        -- calcula vector relativo a cámara
+        local cam = Workspace.CurrentCamera
+        local look = cam.CFrame.LookVector
+        local right = cam.CFrame.RightVector
+        local forward = (look * movementInput.Z) + (right * movementInput.X)
+        local horizontal = Vector3.new(forward.X, 0, forward.Z)
+        local move = Vector3.new(0, 0, 0)
+        if horizontal.Magnitude > 0 then
+            move = horizontal.Unit * flySpeed
+        end
+        local vertical = verticalInput * flySpeed
+        flyBV.Velocity = move + Vector3.new(0, vertical, 0)
+
+        -- orientar al jugador según cámara para sensación natural
+        flyBG.CFrame = CFrame.new(hrp.Position, hrp.Position + cam.CFrame.LookVector)
+    end)
+
+    flyActive = true
+    print("[Nova] Fly activado (local).")
+end
+
+local function stopFly()
+    if flyConn then flyConn:Disconnect(); flyConn = nil end
+    if flyBV and flyBV.Parent then flyBV:Destroy() end
+    if flyBG and flyBG.Parent then flyBG:Destroy() end
+    flyBV = nil
+    flyBG = nil
+    flyActive = false
+    movementInput = Vector3.new()
+    verticalInput = 0
+    print("[Nova] Fly desactivado.")
+end
+
+-- Manejo de entradas (WASD, espacio, shift)
+UserInputService.InputBegan:Connect(function(input, gameProcessed)
+    if gameProcessed then return end
+    if input.UserInputType == Enum.UserInputType.Keyboard then
+        keysDown[input.KeyCode] = true
+        movementInput = Vector3.new(
+            (keysDown[Enum.KeyCode.D] and 1 or 0) - (keysDown[Enum.KeyCode.A] and 1 or 0),
+            0,
+            (keysDown[Enum.KeyCode.W] and 1 or 0) - (keysDown[Enum.KeyCode.S] and 1 or 0)
+        )
+        if keysDown[Enum.KeyCode.Space] then verticalInput = 1 end
+        if keysDown[Enum.KeyCode.LeftShift] or keysDown[Enum.KeyCode.RightShift] then verticalInput = -1 end
+    end
+end)
+
+UserInputService.InputEnded:Connect(function(input, gameProcessed)
+    if input.UserInputType == Enum.UserInputType.Keyboard then
+        keysDown[input.KeyCode] = nil
+        movementInput = Vector3.new(
+            (keysDown[Enum.KeyCode.D] and 1 or 0) - (keysDown[Enum.KeyCode.A] and 1 or 0),
+            0,
+            (keysDown[Enum.KeyCode.W] and 1 or 0) - (keysDown[Enum.KeyCode.S] and 1 or 0)
+        )
+        if not keysDown[Enum.KeyCode.Space] then if verticalInput == 1 then verticalInput = 0 end end
+        if not (keysDown[Enum.KeyCode.LeftShift] or keysDown[Enum.KeyCode.RightShift]) then if verticalInput == -1 then verticalInput = 0 end end
+    end
+end)
+
+-- === Save Teleport: guardado + teleport instantáneo (solo LocalPlayer) ===
+local function saveTeleportPosition()
+    local char = player.Character
+    if not char then return end
+    local hrp = char:FindFirstChild("HumanoidRootPart")
+    if not hrp then return end
+    savedTeleportPos = hrp.Position
+    savedTeleportCFrame = hrp.CFrame
+    print("[Nova] Posición de teleport guardada en:", tostring(savedTeleportPos))
+end
+
+local function teleportToSavedPosition()
+    if not savedTeleportPos or not savedTeleportCFrame then
+        print("[Nova] No hay posición guardada para teletransportar.")
+        return
+    end
+    local char = player.Character
+    if not char then return end
+    local hrp = char:FindFirstChild("HumanoidRootPart")
+    if not hrp then return end
+
+    -- Teleport instantáneo localmente
+    hrp.CFrame = savedTeleportCFrame
+    print("[Nova] Teletransportado a posición guardada:", tostring(savedTeleportPos))
+end
+
+-- === Hooks seguros para Chams / X-Ray (no implementan highlights aquí) ===
+local function requestServerHighlights(enabled)
+    -- Hook: aquí puedes FireServer a un RemoteEvent que controle autorizaciones
+    -- Ejemplo (si tienes el RemoteEvent en ReplicatedStorage llamado "ModeratorRequestEvent"):
+    local evt = ReplicatedStorage:FindFirstChild("ModeratorRequestEvent")
+    if evt and evt:IsA("RemoteEvent") then
+        evt:FireServer("RequestChams", enabled)
+    else
+        print("[Nova] RemoteEvent 'ModeratorRequestEvent' no encontrado. requestServerHighlights no enviado.")
+    end
+    print("[Nova] requestServerHighlights:", enabled)
+end
+
+local function requestServerXRay(enabled)
+    local evt = ReplicatedStorage:FindFirstChild("ModeratorRequestEvent")
+    if evt and evt:IsA("RemoteEvent") then
+        evt:FireServer("RequestXRay", enabled)
+    else
+        print("[Nova] RemoteEvent 'ModeratorRequestEvent' no encontrado. requestServerXRay no enviado.")
+    end
+    print("[Nova] requestServerXRay:", enabled)
+end
+
+-- === Conexiones de botones (con limpieza para evitar duplicados y bug de saturación) ===
 platBtn.MouseButton1Click:Connect(function()
     activePlat = not activePlat
+    platBtn.Text = activePlat and "Desactivar Plataforma" or "Activar Plataforma"
+    setButtonActiveVisual(platBtn, activePlat)
+    print("[Nova] Plataforma:", activePlat and "activada" or "desactivada")
     if activePlat then
-        platBtn.Text = "Desactivar Plataforma"
         monitorJumping()
     else
-        platBtn.Text = "Activar Plataforma"
-        if currentPlatform then
-            currentPlatform:Destroy()
-            currentPlatform = nil
-        end
+        if currentPlatform then currentPlatform:Destroy(); currentPlatform = nil end
     end
 end)
 
 noclipBtn.MouseButton1Click:Connect(function()
     activeNoclip = not activeNoclip
-    if activeNoclip then
-        noclipBtn.Text = "Desactivar Noclip"
-        enableNoclip()
+    noclipBtn.Text = activeNoclip and "Desactivar Noclip" or "Activar Noclip"
+    setButtonActiveVisual(noclipBtn, activeNoclip)
+    print("[Nova] Noclip:", activeNoclip and "activado" or "desactivado")
+    if activeNoclip then enableNoclip() else disableNoclip() end
+end)
+
+flyBtn.MouseButton1Click:Connect(function()
+    flyActive = not flyActive
+    flyBtn.Text = flyActive and "Fly (ON)" or "Activar Fly (vel 60)"
+    setButtonActiveVisual(flyBtn, flyActive)
+    if flyActive then startFly() else stopFly() end
+end)
+
+saveTpBtn.MouseButton1Click:Connect(function()
+    if not savedTeleportPos then
+        saveTeleportPosition()
+        saveTpBtn.Text = "Save Teleport (guardada)"
+        setButtonActiveVisual(saveTpBtn, true)
     else
-        noclipBtn.Text = "Activar Noclip"
-        disableNoclip()
+        -- si ya hay guardado, hacer teleport y limpiar guardado
+        teleportToSavedPosition()
+        savedTeleportPos = nil
+        savedTeleportCFrame = nil
+        saveTpBtn.Text = "Save Teleport (guardar / teleport)"
+        setButtonActiveVisual(saveTpBtn, false)
     end
 end)
 
+chamsBtn.MouseButton1Click:Connect(function()
+    -- toggle UI y llama al hook seguro
+    chamsBtn:SetAttribute("Active", not chamsBtn:GetAttribute("Active"))
+    local active = chamsBtn:GetAttribute("Active") == true
+    chamsBtn.Text = active and "Chams (Requested)" or "Chams (hook)"
+    setButtonActiveVisual(chamsBtn, active)
+    requestServerHighlights(active)
+end)
+
+xrayBtn.MouseButton1Click:Connect(function()
+    xrayBtn:SetAttribute("Active", not xrayBtn:GetAttribute("Active"))
+    local active = xrayBtn:GetAttribute("Active") == true
+    xrayBtn.Text = active and "X-Ray (Requested)" or "X-Ray (hook)"
+    setButtonActiveVisual(xrayBtn, active)
+    requestServerXRay(active)
+end)
+
+-- Minimizar / float
 toggleMenuButton.MouseButton1Click:Connect(function()
-    if mainFrame.Visible then
-        mainFrame.Visible = false
-        floatButton.Visible = true
-    else
-        mainFrame.Visible = true
-        floatButton.Visible = false
-    end
+    local visible = not mainFrame.Visible
+    mainFrame.Visible = visible
+    floatButton.Visible = not visible
 end)
-
 floatButton.MouseButton1Click:Connect(function()
     mainFrame.Visible = true
     floatButton.Visible = false
 end)
 
--- Arrastrar GUI
+-- Drag window (mismo comportamiento)
 do
     local dragging = false
     local dragStart = Vector2.new()
-    local startPos = UDim2.new()
+    local startPos = mainFrame.Position
 
     titleBar.InputBegan:Connect(function(input)
         if input.UserInputType == Enum.UserInputType.MouseButton1 then
@@ -389,7 +598,7 @@ do
     end)
 end
 
--- Arrastrar botón flotante
+-- Drag float button
 do
     local draggingFB = false
     local dragStartFB = Vector2.new()
@@ -420,14 +629,31 @@ do
     end)
 end
 
+-- Reaplicar estados tras respawn
 player.CharacterAdded:Connect(function()
+    -- reactivar plataforma si estaba activePlat
     if activePlat then
-        wait(1)
+        task.wait(1)
         monitorJumping()
     end
+    -- reactivar noclip si estaba
     if activeNoclip then
         enableNoclip()
     end
+    -- reaplicar fly si estaba activo (recrea BV/BG)
+    if flyActive then
+        task.wait(0.5)
+        startFly()
+    else
+        stopFly()
+    end
+    -- reaplicar estados visuales sin acumulación
+    setButtonActiveVisual(platBtn, activePlat)
+    setButtonActiveVisual(noclipBtn, activeNoclip)
+    setButtonActiveVisual(flyBtn, flyActive)
+    setButtonActiveVisual(saveTpBtn, savedTeleportPos ~= nil)
+    setButtonActiveVisual(chamsBtn, chamsBtn:GetAttribute("Active") == true)
+    setButtonActiveVisual(xrayBtn, xrayBtn:GetAttribute("Active") == true)
 end)
 
-print("Script terminado de ejecutar")
+print("[Nova] Nova Code Hub v3.2 listo. Funciones: Plataforma, Noclip, Fly (local), Save Teleport (local), Chams/X-Ray (hooks).")
