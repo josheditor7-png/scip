@@ -1,0 +1,123 @@
+-- Nova Code Hub para ejecutores como Solara
+
+local player = game:GetService("Players").LocalPlayer
+local RunService = game:GetService("RunService")
+
+-- Crear GUI
+local screenGui = Instance.new("ScreenGui", player:WaitForChild("PlayerGui"))
+screenGui.Name = "NovaCodeHub"
+screenGui.ResetOnSpawn = false
+
+-- Marco principal
+local mainFrame = Instance.new("Frame")
+mainFrame.Size = UDim2.new(0, 250, 0, 120)
+mainFrame.Position = UDim2.new(1, -260, 0, 20)
+mainFrame.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
+mainFrame.BorderSizePixel = 0
+mainFrame.Parent = screenGui
+
+local corner = Instance.new("UICorner")
+corner.CornerRadius = UDim.new(0, 6)
+corner.Parent = mainFrame
+
+-- Botón de minimizar
+local minimizeButton = Instance.new("TextButton")
+minimizeButton.Size = UDim2.new(0, 25, 0, 25)
+minimizeButton.Position = UDim2.new(1, -30, 0, 5)
+minimizeButton.BackgroundColor3 = Color3.fromRGB(80, 80, 80)
+minimizeButton.Text = "-"
+minimizeButton.TextColor3 = Color3.new(1, 1, 1)
+minimizeButton.TextStrokeTransparency = 0
+minimizeButton.Parent = mainFrame
+
+local minCorner = Instance.new("UICorner")
+minCorner.CornerRadius = UDim.new(0, 4)
+minCorner.Parent = minimizeButton
+
+-- Botón toggle
+local toggleButton = Instance.new("TextButton")
+toggleButton.Size = UDim2.new(0, 200, 0, 50)
+toggleButton.Position = UDim2.new(0.5, -100, 0.5, -25)
+toggleButton.BackgroundColor3 = Color3.fromRGB(100, 100, 100)
+toggleButton.Text = "Activar Plataforma"
+toggleButton.TextColor3 = Color3.new(1, 1, 1)
+toggleButton.TextStrokeTransparency = 0
+toggleButton.Parent = mainFrame
+
+local toggleCorner = Instance.new("UICorner")
+toggleCorner.CornerRadius = UDim.new(0, 6)
+toggleCorner.Parent = toggleButton
+
+-- Variables
+local active = false
+local currentPlatform = nil
+local monitoring = false
+
+local function createPlatform(pos)
+	if currentPlatform then
+		currentPlatform:Destroy()
+	end
+
+	local part = Instance.new("Part")
+	part.Anchored = true
+	part.Size = Vector3.new(6, 1, 6)
+	part.Position = pos - Vector3.new(0, 3.5, 0)
+	part.Material = Enum.Material.SmoothPlastic
+	part.Color = Color3.fromRGB(150, 150, 150)
+	part.Transparency = 0.4
+	part.CanCollide = true
+	part.Name = "JumpPlatform"
+	part.Parent = workspace
+
+	currentPlatform = part
+end
+
+local function monitorJumping()
+	if monitoring then return end
+	monitoring = true
+
+	coroutine.wrap(function()
+		while active do
+			local character = player.Character
+			if character then
+				local humanoid = character:FindFirstChildOfClass("Humanoid")
+				local hrp = character:FindFirstChild("HumanoidRootPart")
+
+				if humanoid and hrp then
+					if humanoid:GetState() == Enum.HumanoidStateType.Freefall then
+						createPlatform(hrp.Position)
+						repeat
+							RunService.RenderStepped:Wait()
+						until humanoid:GetState() ~= Enum.HumanoidStateType.Freefall
+					end
+				end
+			end
+			RunService.RenderStepped:Wait()
+		end
+		monitoring = false
+	end)()
+end
+
+toggleButton.MouseButton1Click:Connect(function()
+	active = not active
+	if active then
+		toggleButton.Text = "Desactivar Plataforma"
+		monitorJumping()
+	else
+		toggleButton.Text = "Activar Plataforma"
+		if currentPlatform then
+			currentPlatform:Destroy()
+			currentPlatform = nil
+		end
+	end
+end)
+
+local minimized = false
+minimizeButton.MouseButton1Click:Connect(function()
+	minimized = not minimized
+	for _, child in ipairs(mainFrame:GetChildren()) do
+		if child:IsA("TextButton") and child ~= minimizeButton then
+			child.Visible = not minimized
+		end
+	end
+end)
