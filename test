@@ -1,7 +1,8 @@
--- Nova Code Hub — Versión mejorada con secciones desplegables robustas
+-- Nova Code Hub — versión con opción Noclip + corrección de recorte
 
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
+local Workspace = game:GetService("Workspace")
 
 local player = Players.LocalPlayer
 if not player then return end
@@ -16,7 +17,7 @@ screenGui.Parent = guiParent
 -- Frame principal del menú
 local mainFrame = Instance.new("Frame")
 mainFrame.Name = "MainFrame"
-mainFrame.Size = UDim2.new(0, 260, 0, 40)  -- altura mínima (sólo título + barra superior)
+mainFrame.Size = UDim2.new(0, 260, 0, 40)  -- altura mínima al inicio
 mainFrame.Position = UDim2.new(0.5, -130, 0.3, -20)
 mainFrame.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
 mainFrame.BorderSizePixel = 0
@@ -27,7 +28,7 @@ local mainCorner = Instance.new("UICorner")
 mainCorner.CornerRadius = UDim.new(0, 8)
 mainCorner.Parent = mainFrame
 
--- Barra superior (para arrastrar)
+-- Barra de título (para arrastrar)
 local titleBar = Instance.new("Frame")
 titleBar.Name = "TitleBar"
 titleBar.Size = UDim2.new(1, 0, 0, 30)
@@ -61,7 +62,7 @@ local toggleCorner = Instance.new("UICorner")
 toggleCorner.CornerRadius = UDim.new(0, 4)
 toggleCorner.Parent = toggleMenuButton
 
--- Botón flotante cuando el GUI está minimizado
+-- Botón flotante si el GUI está minimizado
 local floatButton = Instance.new("TextButton")
 floatButton.Name = "FloatButton"
 floatButton.Size = UDim2.new(0, 60, 0, 30)
@@ -74,27 +75,28 @@ floatButton.Visible = false
 floatButton.Parent = screenGui
 
 local floatCorner = Instance.new("UICorner")
+floatCorner.CornerRadius = UDim new(0, 8)  -- CORREGIDO: UDim not UDim2 typo
+
 floatCorner.CornerRadius = UDim.new(0, 8)
 floatCorner.Parent = floatButton
 
 -- Contenedor para secciones
 local sectionsContainer = Instance.new("Frame")
 sectionsContainer.Name = "SectionsContainer"
-sectionsContainer.Size = UDim2.new(1, 0, 1, -30)  -- toma el resto debajo de la barra superior
+sectionsContainer.Size = UDim2.new(1, 0, 1, -30)  -- bajo la barra superior
 sectionsContainer.Position = UDim2.new(0, 0, 0, 30)
 sectionsContainer.BackgroundTransparency = 1
 sectionsContainer.Parent = mainFrame
 
--- Tabla para manejar secciones desplegables
+-- Tabla para manejar secciones
 local sections = {}
 
--- Función para crear una sección desplegable
+-- Crear sección desplegable
 local function createSection(name)
     local section = {}
     section.Name = name
     section.Expanded = false
 
-    -- Botón de cabecera de sección
     local btn = Instance.new("TextButton")
     btn.Name = name .. "Button"
     btn.Size = UDim2.new(1, 0, 0, 25)
@@ -111,10 +113,9 @@ local function createSection(name)
     btnCorner.CornerRadius = UDim.new(0, 4)
     btnCorner.Parent = btn
 
-    -- Frame interior para los elementos de la sección
     local frame = Instance.new("Frame")
     frame.Name = name .. "Frame"
-    frame.Size = UDim2.new(1, 0, 0, 0)  -- altura 0 inicialmente
+    frame.Size = UDim2.new(1, 0, 0, 0)
     frame.Position = UDim2.new(0, 0, 0, (#sections) * 25)
     frame.BackgroundTransparency = 1
     frame.ClipsDescendants = true
@@ -122,9 +123,8 @@ local function createSection(name)
 
     section.Button = btn
     section.Frame = frame
-    section.Elements = {}  -- botones internos
+    section.Elements = {}
 
-    -- Lógica de expandir / colapsar sección
     btn.MouseButton1Click:Connect(function()
         section.Expanded = not section.Expanded
         if section.Expanded then
@@ -132,27 +132,26 @@ local function createSection(name)
         else
             btn.Text = name .. " ▼"
         end
-        -- Recalcular todas las secciones para ajustar posiciones y tamaños
+
+        -- Recalcular posiciones / tamaños
         local yOffset = 0
         for _, sec in ipairs(sections) do
             sec.Button.Position = UDim2.new(0, 0, 0, yOffset)
             local frameH = 0
             if sec.Expanded then
-                frameH = #sec.Elements * 30  -- cada botón interno mide 30 de alto
+                frameH = #sec.Elements * 30
             end
             sec.Frame.Position = UDim2.new(0, 0, 0, yOffset + 25)
             sec.Frame.Size = UDim2.new(1, 0, 0, frameH)
-
-            -- Mover sus elementos internos
+            -- Posicionar elementos internos
             for i, elem in ipairs(sec.Elements) do
-                elem.Position = UDim2.new(0, 0, 0, (i - 1) * 30)
+                elem.Position = UDim2.new(0, 0, 0, (i-1) * 30)
             end
-
             yOffset = yOffset + 25 + frameH
         end
 
-        -- Ajustar el tamaño del mainFrame según contenido
-        local totalHeight = 30 + yOffset  -- 30 de la barra superior + contenido
+        -- Ajustar tamaño del mainFrame
+        local totalHeight = 30 + yOffset
         mainFrame.Size = UDim2.new(mainFrame.Size.X.Scale, mainFrame.Size.X.Offset, 0, totalHeight)
     end)
 
@@ -160,10 +159,10 @@ local function createSection(name)
     return section
 end
 
--- Crear sección "Player"
+-- Crear sección “Player”
 local playerSection = createSection("Player")
 
--- Agregar botón interno de "Activar Plataforma" dentro de sección Player
+-- Botón de plataforma dentro de Player
 local platBtn = Instance.new("TextButton")
 platBtn.Name = "PlatToggle"
 platBtn.Size = UDim2.new(1, 0, 0, 30)
@@ -182,11 +181,35 @@ platCorner2.Parent = platBtn
 
 table.insert(playerSection.Elements, platBtn)
 
--- Variables del sistema de plataformas
-local active = false
-local currentPlatform = nil
-local monitoring = false
+-- Botón de Noclip dentro de Player
+local noclipBtn = Instance.new("TextButton")
+noclipBtn.Name = "NoclipToggle"
+noclipBtn.Size = UDim2.new(1, 0, 0, 30)
+noclipBtn.Position = UDim2.new(0, 0, 0, 30)
+noclipBtn.BackgroundColor3 = Color3.fromRGB(100, 100, 100)
+noclipBtn.Text = "Activar Noclip"
+noclipBtn.TextColor3 = Color3.new(1, 1, 1)
+noclipBtn.TextStrokeTransparency = 0
+noclipBtn.Font = Enum.Font.SourceSans
+noclipBtn.TextSize = 16
+noclipBtn.Parent = playerSection.Frame
 
+local noclipCorner = Instance.new("UICorner")
+noclipCorner.CornerRadius = UDim.new(0, 4)
+noclipCorner.Parent = noclipBtn
+
+table.insert(playerSection.Elements, noclipBtn)
+
+-- Variables de plataforma
+local activePlat = false
+local currentPlatform = nil
+local monitoringPlat = false
+
+-- Variables de Noclip
+local activeNoclip = false
+local originalCollisions = {}  -- para restaurar colisiones originales
+
+-- Función crear plataforma como antes
 local function createPlatform(position)
     if currentPlatform then
         currentPlatform:Destroy()
@@ -205,10 +228,10 @@ local function createPlatform(position)
 end
 
 local function monitorJumping()
-    if monitoring then return end
-    monitoring = true
+    if monitoringPlat then return end
+    monitoringPlat = true
     coroutine.wrap(function()
-        while active do
+        while activePlat do
             local character = player.Character
             if character then
                 local humanoid = character:FindFirstChildOfClass("Humanoid")
@@ -234,14 +257,74 @@ local function monitorJumping()
             end
             RunService.RenderStepped:Wait()
         end
-        monitoring = false
+        monitoringPlat = false
     end)()
 end
 
--- Conectar el botón interno de plataforma
+-- Función para activar noclip (atraviesa muros pero no caer al vacío)
+local function enableNoclip()
+    local character = player.Character
+    if not character then return end
+    for _, part in pairs(character:GetDescendants()) do
+        if part:IsA("BasePart") and part.CanCollide then
+            originalCollisions[part] = true
+            part.CanCollide = false
+        end
+    end
+    activeNoclip = true
+    -- Conexión para garantizar colisión con suelo/floor
+    -- Vamos a hacer que cuando el jugador está en caída libre, verificamos si hay suelo justo debajo.
+    -- Si no hay suelo, temporariamente reactivamos colisión para caer al suelo.
+    RunService.Stepped:Connect(function()
+        if not activeNoclip then return end
+        local char = player.Character
+        if char then
+            local humanoid = char:FindFirstChildOfClass("Humanoid")
+            local hrp = char:FindFirstChild("HumanoidRootPart")
+            if humanoid and hrp then
+                if humanoid:GetState() == Enum.HumanoidStateType.Freefall then
+                    -- Raycast hacia abajo unos studs para ver si hay suelo cercano
+                    local origin = hrp.Position
+                    local dir = Vector3.new(0, -5, 0)
+                    local ray = Workspace:Raycast(origin, dir)
+                    if not ray then
+                        -- no suelo cercano — permitir caer
+                        for part, _ in pairs(originalCollisions) do
+                            if part and part.Parent then
+                                part.CanCollide = true
+                            end
+                        end
+                    else
+                        -- hay suelo cercano: restoramos colisiones del personaje
+                        for part, _ in pairs(originalCollisions) do
+                            if part and part.Parent then
+                                part.CanCollide = false
+                            end
+                        end
+                    end
+                end
+            end
+        end
+    end)
+end
+
+-- Función para desactivar noclip y restaurar colisiones
+local function disableNoclip()
+    local character = player.Character
+    if not character then return end
+    for part, _ in pairs(originalCollisions) do
+        if part and part.Parent then
+            part.CanCollide = true
+        end
+    end
+    originalCollisions = {}
+    activeNoclip = false
+end
+
+-- Conexiones de botones
 platBtn.MouseButton1Click:Connect(function()
-    active = not active
-    if active then
+    activePlat = not activePlat
+    if activePlat then
         platBtn.Text = "Desactivar Plataforma"
         monitorJumping()
     else
@@ -250,6 +333,17 @@ platBtn.MouseButton1Click:Connect(function()
             currentPlatform:Destroy()
             currentPlatform = nil
         end
+    end
+end)
+
+noclipBtn.MouseButton1Click:Connect(function()
+    activeNoclip = not activeNoclip
+    if activeNoclip then
+        noclipBtn.Text = "Desactivar Noclip"
+        enableNoclip()
+    else
+        noclipBtn.Text = "Activar Noclip"
+        disableNoclip()
     end
 end)
 
@@ -269,7 +363,7 @@ floatButton.MouseButton1Click:Connect(function()
     floatButton.Visible = false
 end)
 
--- Arrastrar el gui principal con la barra superior
+-- Arrastrar GUI principal
 do
     local dragging = false
     local dragStart = Vector2.new()
@@ -282,19 +376,17 @@ do
             startPos = mainFrame.Position
         end
     end)
-
     titleBar.InputChanged:Connect(function(input)
         if dragging and input.UserInputType == Enum.UserInputType.MouseMovement then
             local delta = input.Position - dragStart
             mainFrame.Position = UDim2.new(
                 startPos.X.Scale,
                 startPos.X.Offset + delta.X,
-                startPos.Y.Scale,
+                start Pos.Y.Scale,
                 startPos.Y.Offset + delta.Y
             )
         end
     end)
-
     titleBar.InputEnded:Connect(function(input)
         if input.UserInputType == Enum.UserInputType.MouseButton1 then
             dragging = false
@@ -315,7 +407,6 @@ do
             startPosFB = floatButton.Position
         end
     end)
-
     floatButton.InputChanged:Connect(function(input)
         if draggingFB and input.UserInputType == Enum.UserInputType.MouseMovement then
             local delta = input.Position - dragStartFB
@@ -327,7 +418,6 @@ do
             )
         end
     end)
-
     floatButton.InputEnded:Connect(function(input)
         if input.UserInputType == Enum.UserInputType.MouseButton1 then
             draggingFB = false
@@ -335,10 +425,13 @@ do
     end)
 end
 
--- Si el jugador reaparece, reiniciar monitoreo si activo
+-- Cuando el personaje reaparece, reactivar si estaban activos
 player.CharacterAdded:Connect(function()
-    if active then
+    if activePlat then
         wait(1)
         monitorJumping()
+    end
+    if activeNoclip then
+        enableNoclip()
     end
 end)
